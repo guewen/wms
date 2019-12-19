@@ -3,7 +3,7 @@
 
 {
     "name": "WMS",
-    "version": "12.0.1.0.0",
+    "version": "13.0.1.0.0",
     "summary": "Warehouse Management System",
     "author": "Camptocamp,Odoo Community Association (OCA)",
     "category": "Stock Management",
@@ -19,6 +19,7 @@
         "security/wms_security.xml",
     ],
     "installable": True,
+    "website": "https://github.com/OCA/wms",
     "license": "AGPL-3",
     "application": True,
     "development_status": "Alpha",
