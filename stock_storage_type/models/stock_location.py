@@ -30,18 +30,27 @@ class StockLocation(models.Model):
     )
 
     @api.depends(
-        "location_storage_type_ids",
-        "location_id",
-        "location_id.allowed_location_storage_type_ids",
+        "location_storage_type_ids", "location_id.location_storage_type_ids"
     )
     def _compute_allowed_location_storage_type_ids(self):
         for location in self:
-            if location.location_storage_type_ids:
-                location.allowed_location_storage_type_ids = [
-                    (6, 0, location.location_storage_type_ids.ids)
-                ]
+            current_types = location.allowed_location_storage_type_ids
+            if (
+                location.location_storage_type_ids
+                and location.location_storage_type_ids != current_types
+            ):
+                location.allowed_location_storage_type_ids = (
+                    location.location_storage_type_ids
+                )
             else:
                 parent = location.location_id
-                location.allowed_location_storage_type_ids = [
-                    (6, 0, parent.allowed_location_storage_type_ids.ids)
-                ]
+                while parent:
+                    if (
+                        parent.location_storage_type_ids
+                        and parent.location_storage_type_ids != current_types
+                    ):
+                        location.allowed_location_storage_type_ids = (
+                            parent.location_storage_type_ids
+                        )
+                        break
+                    parent = parent.location_id
