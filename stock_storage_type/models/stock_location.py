@@ -94,11 +94,11 @@ class StockLocation(models.Model):
         "the location, either now or in pending operations"
     )
 
-    @api.depends('child_ids.in_move_line_ids')
+    @api.depends('child_ids.children_in_move_line_ids')
     def _compute_children_in_move_line_ids(self):
         for rec in self:
             rec.children_in_move_line_ids = (
-                rec.mapped('child_ids.in_move_line_ids') | rec.in_move_line_ids
+                rec.mapped('child_ids.children_in_move_line_ids') | rec.in_move_line_ids
             )
 
     @api.depends('quant_ids', 'in_move_ids', 'children_in_move_line_ids')
@@ -236,38 +236,16 @@ class StockLocation(models.Model):
         allowed = self.select_allowed_locations(package_storage_type, quants, products, limit=1)
         return allowed
 
-    def select_allowed_locations(self, package_storage_type, quants, products, limit=None):
-        # TODO merge with select_first_allowed_location ?
-        # We have package who may be placed in a stock.location
-        #
-        # 1. On the stock.location there are location_storage_type and on the
-        # packages there are package_storage_type. Between both, there's a m2m
-        # who says which package ST can be placed in which location ST
-        #
-        # 2. On a location_ST there are some additional restrictions: a -
-        # capacity (volume / height / weight) and b - properties (boolean
-        # flags: only empty, don't mix lots, don't mix products)
+    def _domain_location_storage_type_constraints(self, compatible_locations, package_storage_type, quants, products):
+        """Compute the domain for the location storage type which match the package
+        storage type
+
+        This method also checks the "capacity" constraints (height and weight)
+        """
+        # There can be multiple location storage types for a given
+        # location, so we need to filter on the ones relative to the package
+        # we consider.
         StockLocationStorageType = self.env['stock.location.storage.type']
-        _logger.debug(
-            'select allowed location for package storage type %s (q=%s, p=%s)',
-            package_storage_type.name, quants, products.mapped('name')
-        )
-        # 1: filter locations on compatible storage type
-        compatible_locations = self.search(
-            [
-                ('id', 'in', self.ids),
-                (
-                    'allowed_location_storage_type_ids',
-                    'in',
-                    package_storage_type.location_storage_type_ids.ids
-                ),
-            ]
-        )
-        # now find the location storage types among the compatible locations
-        # which match the package storage type (careful, there can be multiple
-        # location storage types for a given location, so we need to filter on
-        # the ones relative to the package we consider).
-        # We also check the "capacity" constraints (height and weight)
         compatible_location_storage_types = StockLocationStorageType.search(
             [('allowed_location_ids', 'in', compatible_locations.ids)]
         )
@@ -287,33 +265,53 @@ class StockLocation(models.Model):
                 ('max_weight', '=', 0),
                 ('max_weight', '>', quants.package_id.pack_weight),
             ]
+        _logger.debug('pertinent storage type domain: %s',
+                      pertinent_loc_storagetype_domain)
+        return pertinent_loc_storagetype_domain
 
-        pertinent_loc_storage_types = StockLocationStorageType.search(
-            pertinent_loc_storagetype_domain
+    def select_allowed_locations(self, package_storage_type, quants, products, limit=None):
+        # TODO merge with select_first_allowed_location ?
+        # We have package who may be placed in a stock.location
+        #
+        # 1. On the stock.location there are location_storage_type and on the
+        # packages there are package_storage_type. Between both, there's a m2m
+        # who says which package ST can be placed in which location ST
+        #
+        # 2. On a location_ST there are some additional restrictions: a -
+        # capacity (volume / height / weight) and b - properties (boolean
+        # flags: only empty, don't mix lots, don't mix products)
+        LocStorageType = self.env['stock.location.storage.type']
+        _logger.debug(
+            'select allowed location for package storage type %s (q=%s, p=%s)',
+            package_storage_type.name, quants, products.mapped('name')
         )
-        _logger.debug('pertinent storage type domain: %s', pertinent_loc_storagetype_domain)
+        # 1: filter locations on compatible storage type
+        compatible_locations = self.search(
+            [
+                ('id', 'in', self.ids),
+                (
+                    'allowed_location_storage_type_ids',
+                    'in',
+                    package_storage_type.location_storage_type_ids.ids
+                ),
+            ]
+        )
+        pertinent_loc_s_t_domain = (
+            LocStorageType._domain_location_storage_type_constraints(
+                compatible_locations, package_storage_type, quants, products
+            )
+        )
+        pertinent_loc_storage_types = LocStorageType.search(
+            pertinent_loc_s_t_domain
+        )
 
         # now loop over the pertinent location storage types (there should be
         # few of them) and check for properties to find suitable locations
         valid_location_ids = set()
         for loc_storage_type in pertinent_loc_storage_types:
-            location_domain = [
-                ('id', 'in', compatible_locations.ids),
-                ('allowed_location_storage_type_ids', '=', loc_storage_type.id),
-            ]
-            if loc_storage_type.only_empty:
-                location_domain.append(
-                    ('location_is_empty', '=', True)
-                )
-            if loc_storage_type.do_not_mix_products:
-                location_domain.append(
-                    ('location_will_contain_product_ids', 'not in', products.ids)
-                )
-                if loc_storage_type.do_not_mix_lots:
-                    lots = quants.mapped('lot_id')
-                    location_domain.append(
-                        ('location_will_contain_lot_ids', 'not in', lots.ids),
-                    )
+            location_domain = loc_storage_type._domain_location_storage_type(
+                compatible_locations, quants, products
+            )
             locations = self.search(location_domain, limit=limit)
             valid_location_ids |= set(locations.ids)
         valid_locations = self.env['stock.location'].search(

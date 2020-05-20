@@ -1,9 +1,13 @@
 # Copyright 2019 Camptocamp SA
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+import logging
+
 from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError
 
 from odoo.addons.base_m2m_custom_field.fields import Many2manyCustom
+
+_logger = logging.getLogger(__name__)
 
 
 class StockLocationStorageType(models.Model):
@@ -114,3 +118,61 @@ class StockLocationStorageType(models.Model):
                     slst.max_weight,
                 ]
             )
+
+    def _domain_location_storage_type(self, candidate_locations, quants, products):
+        """compute a domain which applies the constraint of the
+        stock.location.storage.type to select locations among candidate
+        locations.
+        """
+        self.ensure_one()
+        location_domain = [
+            ('id', 'in', candidate_locations.ids),
+            ('allowed_location_storage_type_ids', '=', self.id),
+        ]
+        if self.only_empty:
+            location_domain.append(
+                ('location_is_empty', '=', True)
+            )
+        if self.do_not_mix_products:
+            location_domain.append(
+                ('location_will_contain_product_ids', 'not in', products.ids)
+            )
+            if self.do_not_mix_lots:
+                lots = quants.mapped('lot_id')
+                location_domain.append(
+                    ('location_will_contain_lot_ids', 'not in', lots.ids),
+                )
+        return location_domain
+
+    @api.model
+    def _domain_location_storage_type_constraints(self, compatible_locations, package_storage_type, quants, products):
+        """Compute the domain for the location storage type which match the package
+        storage type
+
+        This method also checks the "capacity" constraints (height and weight)
+        """
+        # There can be multiple location storage types for a given
+        # location, so we need to filter on the ones relative to the package
+        # we consider.
+        compatible_location_storage_types = self.search(
+            [('allowed_location_ids', 'in', compatible_locations.ids)]
+        )
+        pertinent_loc_storagetype_domain = [
+            ('id', 'in', compatible_location_storage_types.ids),
+            ('package_storage_type_ids', '=', package_storage_type.id),
+        ]
+        if quants.package_id.height:
+            pertinent_loc_storagetype_domain += [
+                '|',
+                ('max_height', '=', 0),
+                ('max_height', '>', quants.package_id.height),
+            ]
+        if quants.package_id.pack_weight:
+            pertinent_loc_storagetype_domain += [
+                '|',
+                ('max_weight', '=', 0),
+                ('max_weight', '>', quants.package_id.pack_weight),
+            ]
+        _logger.debug('pertinent storage type domain: %s',
+                      pertinent_loc_storagetype_domain)
+        return pertinent_loc_storagetype_domain
