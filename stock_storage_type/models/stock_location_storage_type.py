@@ -22,13 +22,6 @@ class StockLocationStorageType(models.Model):
         "stock_location_storage_type_id",
         "stock_location_id",
     )
-    allowed_location_ids = fields.Many2many(
-        "stock.location",
-        "stock_location_allowed_stock_location_storage_type_rel",
-        "stock_location_storage_type_id",
-        "stock_location_id",
-        readonly=True,
-    )
 
     package_storage_type_ids = Many2manyCustom(
         "stock.package.storage.type",
@@ -143,36 +136,3 @@ class StockLocationStorageType(models.Model):
                     ('location_will_contain_lot_ids', 'not in', lots.ids),
                 )
         return location_domain
-
-    @api.model
-    def _domain_location_storage_type_constraints(self, compatible_locations, package_storage_type, quants, products):
-        """Compute the domain for the location storage type which match the package
-        storage type
-
-        This method also checks the "capacity" constraints (height and weight)
-        """
-        # There can be multiple location storage types for a given
-        # location, so we need to filter on the ones relative to the package
-        # we consider.
-        compatible_location_storage_types = self.search(
-            [('allowed_location_ids', 'in', compatible_locations.ids)]
-        )
-        pertinent_loc_storagetype_domain = [
-            ('id', 'in', compatible_location_storage_types.ids),
-            ('package_storage_type_ids', '=', package_storage_type.id),
-        ]
-        if quants.package_id.height:
-            pertinent_loc_storagetype_domain += [
-                '|',
-                ('max_height', '=', 0),
-                ('max_height', '>', quants.package_id.height),
-            ]
-        if quants.package_id.pack_weight:
-            pertinent_loc_storagetype_domain += [
-                '|',
-                ('max_weight', '=', 0),
-                ('max_weight', '>', quants.package_id.pack_weight),
-            ]
-        _logger.debug('pertinent storage type domain: %s',
-                      pertinent_loc_storagetype_domain)
-        return pertinent_loc_storagetype_domain

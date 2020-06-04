@@ -236,7 +236,7 @@ class StockLocation(models.Model):
         allowed = self.select_allowed_locations(package_storage_type, quants, products, limit=1)
         return allowed
 
-    def _domain_location_storage_type_constraints(self, compatible_locations, package_storage_type, quants, products):
+    def _domain_location_storage_type_constraints(self, package_storage_type, quants, products):
         """Compute the domain for the location storage type which match the package
         storage type
 
@@ -245,10 +245,8 @@ class StockLocation(models.Model):
         # There can be multiple location storage types for a given
         # location, so we need to filter on the ones relative to the package
         # we consider.
-        StockLocationStorageType = self.env['stock.location.storage.type']
-        compatible_location_storage_types = StockLocationStorageType.search(
-            [('allowed_location_ids', 'in', compatible_locations.ids)]
-        )
+        compatible_location_storage_types = self.mapped("allowed_location_storage_type_ids")
+
         pertinent_loc_storagetype_domain = [
             ('id', 'in', compatible_location_storage_types.ids),
             ('package_storage_type_ids', '=', package_storage_type.id),
@@ -297,10 +295,11 @@ class StockLocation(models.Model):
             ]
         )
         pertinent_loc_s_t_domain = (
-            LocStorageType._domain_location_storage_type_constraints(
-                compatible_locations, package_storage_type, quants, products
+            compatible_locations._domain_location_storage_type_constraints(
+                package_storage_type, quants, products
             )
         )
+
         pertinent_loc_storage_types = LocStorageType.search(
             pertinent_loc_s_t_domain
         )
