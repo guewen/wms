@@ -71,13 +71,18 @@ class TestStorageTypeMove(TestStorageTypeCommon):
             move.move_line_ids.location_dest_id, self.pallets_bin_1_location
         )
 
-    def test_do_not_mix_products_confirmed_move(self):
+    def test_do_not_mix_products_confirmed_move_ok(self):
         self.pallets_location_storage_type.write(
             {"only_empty": False, "do_not_mix_products": True}
         )
         move = self._test_confirmed_move()
         self.assertEqual(
             move.move_line_ids.location_dest_id, self.pallets_bin_1_location
+        )
+
+    def test_do_not_mix_products_confirmed_move_nok(self):
+        self.pallets_location_storage_type.write(
+            {"only_empty": False, "do_not_mix_products": True}
         )
         move_other_product = self._test_confirmed_move(
             self.env.ref("product.product_product_10")

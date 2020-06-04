@@ -127,12 +127,23 @@ class StockLocationStorageType(models.Model):
                 ('location_is_empty', '=', True)
             )
         if self.do_not_mix_products:
-            location_domain.append(
-                ('location_will_contain_product_ids', 'not in', products.ids)
-            )
+            location_domain += [
+                '|',
+                # Ideally, we would like a domain which is a strict comparison:
+                # if we do not mix products, we should be able to filter on ==
+                # product.id. Here, if we can create a move for product B and
+                # set it's destination in a location already used by product A,
+                # then all the new moves for product B will be allowed in the
+                # location.
+                ('location_will_contain_product_ids', 'in', products.ids),
+                ('location_will_contain_product_ids', '=', [])
+            ]
             if self.do_not_mix_lots:
                 lots = quants.mapped('lot_id')
-                location_domain.append(
-                    ('location_will_contain_lot_ids', 'not in', lots.ids),
-                )
+                location_domain += [
+                    '|',
+                    # same comment as for the products
+                    ('location_will_contain_lot_ids', 'in', lots.ids),
+                    ('location_will_contain_lot_ids', '=', []),
+                ]
         return location_domain
