@@ -597,7 +597,7 @@ class LocationContentTransferSetDestinationChainSpecialCase(
     @classmethod
     def setUpClassBaseData(cls):
         super().setUpClassBaseData()
-        # Test split of partial qty when we the moves have "move_orig_ids".
+        # Test split of partial qty when the moves have "move_orig_ids".
         # We create a chain of pickings to ensure the proper state is computed
         # for the split move.
         cls.picking_a = picking_a = cls._create_picking(lines=[(cls.product_c, 10)])
@@ -627,7 +627,7 @@ class LocationContentTransferSetDestinationChainSpecialCase(
 
     def test_set_destination_line_partial_qty_with_move_orig_ids(self):
         """Scanned destination location with partial qty, but related moves
-        has to be splitted and the move has origin moves (with origin moves)
+        has to be split and the move has origin moves (with origin moves)
         """
         picking_a = self.picking_a
         picking_b = self.picking_b
@@ -671,7 +671,7 @@ class LocationContentTransferSetDestinationChainSpecialCase(
 
     def test_set_destination_package_partial_qty_with_move_orig_ids(self):
         """Scanned destination location with partial qty, but related moves
-        has to be splitted and the move has origin moves
+        has to be split and the move has origin moves
         (with package and origin moves)
         """
         picking_a = self.picking_a
