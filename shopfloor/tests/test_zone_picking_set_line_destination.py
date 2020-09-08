@@ -509,7 +509,8 @@ class ZonePickingSetLineDestinationCase(ZonePickingCommonCase):
             new_move_line,
             [
                 {
-                    "result_package_id": new_move_line.package_id.id,  # Unchanged
+                    # reset, we don't move the entire package
+                    "result_package_id": False,
                     "product_uom_qty": 4,
                     "qty_done": 0,
                     "shopfloor_user_id": False,
