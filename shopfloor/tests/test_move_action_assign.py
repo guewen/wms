@@ -42,15 +42,11 @@ class TestStockMoveActionAssign(CommonCase):
 
         line2.qty_done = 8
         line2.move_id.split_other_move_lines(line2)
-        # we are no longer moving the entire package
-        picking.package_level_ids.shallow_unlink()
         line2.result_package_id = dest_package1
         line2.move_id.with_context(_sf_no_backorder=True)._action_done()
 
         line3.qty_done = 12
         line3.move_id.split_other_move_lines(line3)
-        # we are no longer moving the entire package
-        picking.package_level_ids.shallow_unlink()
         line3.result_package_id = dest_package2
         line3.move_id.with_context(_sf_no_backorder=True)._action_done()
 

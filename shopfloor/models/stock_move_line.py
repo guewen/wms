@@ -154,3 +154,30 @@ class StockMoveLine(models.Model):
                 lambda ml: ml.state not in ("cancel", "done")
             )
         return lines
+
+    def write(self, vals):
+        self._on_write_result_package_id(vals)
+        return super().write(vals)
+
+    def _on_write_result_package_id(self, vals):
+        if self.env.context.get("_from_on_write_result_package_id"):
+            return
+        package_levels_to_delete = self.env["stock.package_level"]
+        # Odoo leaves empty package levels when we are no longer moving
+        # the entire package. It is hidden from the UI, so users normally
+        # don't see it, but
+        if "result_package_id" in vals:
+            if vals.get("result_package_id"):
+                # if we change the result package on at least one line
+                # of a package level, it means we are no longer moving
+                # the entire package, and the package level must be deleted
+                package_levels_to_delete |= self.package_level_id.filtered(
+                    lambda lvl: lvl.package_id.id != vals["result_package_id"]
+                )
+            else:
+                # we empty the package: delete the package level for all lines
+                package_levels_to_delete |= self.package_level_id
+
+        package_levels_to_delete.with_context(
+            _from_on_write_result_package_id=True
+        ).shallow_unlink()
