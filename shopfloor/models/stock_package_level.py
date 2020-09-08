@@ -33,3 +33,15 @@ class StockPackageLevel(models.Model):
                     line.owner_id = quant.owner_id
 
         self.package_id = new_package
+
+    def shallow_unlink(self):
+        """Unlink package level without affecting moves and lines"""
+        if not self:
+            return True
+        # when we unlink a package level, it automatically drops
+        # any related move and resets the result_package_id of
+        # move lines, we prevent this by detaching it first
+        self.write({"move_ids": [(6, 0, [])], "move_line_ids": [(6, 0, [])]})
+        # as we are no longer moving an entire package, the
+        # package level is irrelevant
+        return self.unlink()
