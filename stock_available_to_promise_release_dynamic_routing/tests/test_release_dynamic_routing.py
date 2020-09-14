@@ -1,5 +1,15 @@
 # Copyright 2020 Camptocamp (https://www.camptocamp.com)
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl.html).
+"""
+When we "release" moves, we set the "printed" flag on the transfers,
+because after a release, we shouldn't have any new move merged in a
+"wave" of release.
+
+The stock_available_to_promise_release module adds the flag on all
+the transfer chain (pick, pack, ship, ...), but as transfers created
+for dynamic routing are created later, we have to ensure that transfers
+for these new moves have the flag. These tests check this.
+"""
 
 from odoo.addons.stock_available_to_promise_release.tests.common import (
     PromiseReleaseCommonCase,

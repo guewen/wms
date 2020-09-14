@@ -199,8 +199,8 @@ class StockMove(models.Model):
         # Set all transfers released to "printed", consider the work has
         # been planned and started and another "release" of moves should
         # (for instance) merge new pickings with this "round of release".
-        pulled_moves._release_set_printed()
         pulled_moves._release_assign_moves()
+        pulled_moves._release_set_printed()
 
         return True
 
