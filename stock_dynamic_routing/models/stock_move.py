@@ -13,15 +13,22 @@ class StockMove(models.Model):
 
     RoutingDetails = namedtuple(
         "RoutingDetails",
-        # rule is the routing rule to apply
-        # push_original_destination is used only for push rules, store the
+        # rule: is the routing rule to apply
+        #
+        # pull_reserved_location: contains the locations where the move lines
+        # where reserved in the savepoint, we restrict to these locations when
+        # reserving again after the dynamic routing has been applied (only for
+        # pull)
+        #
+        # push_original_destination: is used only for push rules, store the
         # original location
-        "rule push_original_destination",
+        "rule pull_reserved_location push_original_destination",
     )
 
     def _no_routing_details(self):
         return self.RoutingDetails(
             rule=self.env["stock.routing.rule"].browse(),
+            pull_reserved_location=self.env["stock.location"].browse(),
             push_original_destination=self.env["stock.location"].browse(),
         )
 
@@ -47,6 +54,7 @@ class StockMove(models.Model):
             if rule:
                 moves_with_routing_details[move] = self.RoutingDetails(
                     rule=rule,
+                    pull_reserved_location=self.env["stock.location"].browse(),
                     # Never change the destination of push rules in a chain,
                     # it's done only on the first move re-routed
                     push_original_destination=self.env["stock.location"].browse(),
@@ -171,13 +179,26 @@ class StockMove(models.Model):
                     for line in move_lines:
                         dests[line.location_dest_id] += line.product_qty
                     for destination, qty in dests.items():
-                        moves_routing[move][
-                            self.RoutingDetails(rule, destination)
-                        ] = qty
+                        routing_details = self.RoutingDetails(
+                            rule=rule,
+                            pull_reserved_location=self.env["stock.location"].browse(),
+                            push_original_destination=destination,
+                        )
+                        moves_routing[move][routing_details] = qty
                 else:
-                    moves_routing[move][self.RoutingDetails(rule, no_loc)] = sum(
-                        move_lines.mapped("product_qty")
-                    )
+                    lines_per_src_location = {}
+                    for line in move_lines:
+                        lines_per_src_location.setdefault(line.location_id, [])
+                        lines_per_src_location[line.location_id].append(line)
+                    for location, location_lines in lines_per_src_location.items():
+                        routing_details = self.RoutingDetails(
+                            rule=rule,
+                            pull_reserved_location=location,
+                            push_original_destination=no_loc,
+                        )
+                        moves_routing[move][routing_details] = sum(
+                            line.product_qty for line in location_lines
+                        )
             if move.state == "partially_available":
                 # consider unreserved quantity as without routing, so it will
                 # be split if another part of the quantity need a routing
@@ -279,7 +300,11 @@ class StockMove(models.Model):
             # _action_assign() is called again, it should not be an issue
             # because the move's state will be "assigned" and will be excluded
             # by the method.
-            move.with_context(exclude_apply_dynamic_routing=True)._action_assign()
+            move.with_context(
+                exclude_apply_dynamic_routing=True,
+                # force the reservation in the same location as initially
+                gather_in_location_id=routing_details[move].pull_reserved_location.id,
+            )._action_assign()
 
         pickings_to_check_for_emptiness._dynamic_routing_handle_empty()
 
